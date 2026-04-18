@@ -9,6 +9,8 @@ from ...util.hparams import HyperParams
 class unkeHyperParams(HyperParams):
     # Method
     model_name: str
+    alg_name: str = "UnKe"
+    model_parallel: bool = False
     layers: List[int]
     layer_selection: Literal["all", "random"]
     fact_token: Literal[
@@ -43,6 +45,5 @@ class unkeHyperParams(HyperParams):
             f'unkeHyperParams can not load from {hparams_name_or_path}, '
             f'alg_name is {config["alg_name"]}'
         )
-        config.pop('alg_name', None)
         return cls(**config)
 
