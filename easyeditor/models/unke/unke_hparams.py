@@ -43,5 +43,6 @@ class unkeHyperParams(HyperParams):
             f'unkeHyperParams can not load from {hparams_name_or_path}, '
             f'alg_name is {config["alg_name"]}'
         )
+        config.pop('alg_name', None)
         return cls(**config)
 
