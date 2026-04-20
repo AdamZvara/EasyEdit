@@ -32,7 +32,7 @@ class unkeHyperParams(HyperParams):
     alg_name: str = "UnKe"
     model_parallel: bool = False
     
-	@classmethod
+    @classmethod
     def from_hparams(cls, hparams_name_or_path: str):
         if '.yaml' not in hparams_name_or_path:
             hparams_name_or_path = hparams_name_or_path + '.yaml'
