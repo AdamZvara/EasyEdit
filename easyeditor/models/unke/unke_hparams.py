@@ -9,8 +9,6 @@ from ...util.hparams import HyperParams
 class unkeHyperParams(HyperParams):
     # Method
     model_name: str
-    alg_name: str = "UnKe"
-    model_parallel: bool = False
     layers: List[int]
     layer_selection: Literal["all", "random"]
     fact_token: Literal[
@@ -31,8 +29,10 @@ class unkeHyperParams(HyperParams):
     attn_module_tmp: str
     ln_f_module: str
     lm_head_module: str
-
-    @classmethod
+    alg_name: str = "UnKe"
+    model_parallel: bool = False
+    
+	@classmethod
     def from_hparams(cls, hparams_name_or_path: str):
         if '.yaml' not in hparams_name_or_path:
             hparams_name_or_path = hparams_name_or_path + '.yaml'
