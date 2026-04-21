@@ -71,21 +71,23 @@ def compute_z(
 
     
     def edit_output_fn(cur_out, cur_layer):
-        nonlocal target_init  
+        nonlocal target_init
 
         if cur_layer == hparams.layer_module_tmp.format(layer):
-            
-            if target_init is None:
-               
-                target_init = cur_out[0][0, lookup_idxs[0]].detach().clone()
+            # Decoder layers may return a tuple (hidden, ...) or a bare tensor
+            layer_out = cur_out[0] if isinstance(cur_out, tuple) else cur_out
 
-            
+            if target_init is None:
+                target_init = layer_out[0, lookup_idxs[0]].detach().clone()
+
             for i, idx in enumerate(lookup_idxs):
-                
-                if len(lookup_idxs)!=len(cur_out[0]):
-                    cur_out[0][idx, i, :] += delta
+                if len(lookup_idxs) != layer_out.shape[0]:
+                    layer_out[idx, i, :] += delta
                 else:
-                    cur_out[0][i, idx, :] += delta
+                    layer_out[i, idx, :] += delta
+
+            if isinstance(cur_out, tuple):
+                return (layer_out,) + cur_out[1:]
 
         return cur_out
 
@@ -113,7 +115,8 @@ def compute_z(
 
         # Compute loss on rewriting targets
 
-        output=tr[hparams.layer_module_tmp.format(loss_layer)].output[0]  
+        _loss_out = tr[hparams.layer_module_tmp.format(loss_layer)].output
+        output = _loss_out[0] if isinstance(_loss_out, tuple) else _loss_out
         if output.shape[1]!=rewriting_targets.shape[1]:
             output=torch.transpose(output, 0, 1)
         full_repr =  output
