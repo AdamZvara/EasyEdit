@@ -104,7 +104,7 @@ class BaseEditor:
                 self.model = AutoModelForCausalLM.from_pretrained(self.model_name, **model_kwargs, trust_remote_code=True)
                 self.tok = AutoTokenizer.from_pretrained(self.model_name,trust_remote_code=True)
                 self.tok.pad_token_id = self.tok.eos_token_id
-            elif 'chatglm' in self.model_name.lower():
+            elif 'glm' in self.model_name.lower():
                 self.model = AutoModel.from_pretrained(self.model_name,trust_remote_code=True, **model_kwargs)
                 self.tok = AutoTokenizer.from_pretrained(self.model_name,trust_remote_code=True)
                 if 'chatglm2'in self.model_name.lower(): 
