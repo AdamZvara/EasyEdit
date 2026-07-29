@@ -43,7 +43,7 @@ def apply_memit_to_model(
     if copy:
         model = deepcopy(model)
 
-    deltas = execute_memit(model, tok, requests, hparams, cache_template=cache_template)
+    deltas, edit_stats = execute_memit(model, tok, requests, hparams, cache_template=cache_template)
 
     with torch.no_grad():
         for w_name, (key_mat, val_mat) in deltas.items():
@@ -58,7 +58,7 @@ def apply_memit_to_model(
 
     print(f"New weights successfully inserted into {list(deltas.keys())}")
 
-    return model, weights_copy
+    return model, weights_copy, edit_stats
 
 
 def execute_memit(
@@ -74,6 +74,7 @@ def execute_memit(
     """
 
     deltas = {}
+    edit_stats = {"method": "MEMIT", "requests": [], "layers": []}
 
     # Update target and print info
     requests = deepcopy(requests)
@@ -109,7 +110,7 @@ def execute_memit(
     z_layer = hparams.layers[-1]
     z_list = []
 
-    for request in requests:
+    for req_idx, request in enumerate(requests):
         # Retrieve k/v pair if already stored in cache
         cache_fname = (
             Path(
@@ -134,7 +135,7 @@ def execute_memit(
 
         # Compute k/v pair if not loaded from cache
         if not data_loaded:
-            cur_z = compute_z(
+            cur_z, z_stats = compute_z(
                 model,
                 tok,
                 request,
@@ -142,6 +143,7 @@ def execute_memit(
                 z_layer,
                 context_templates,
             )
+            edit_stats["requests"].append({"request_idx": req_idx, **z_stats})
 
             z_list.append(cur_z)
 
@@ -176,7 +178,8 @@ def execute_memit(
             track='out'
         ).T
         targets = zs - cur_zs
-        print("z error", torch.linalg.norm(targets, dim=0).mean())
+        z_error_norm = torch.linalg.norm(targets, dim=0).mean().item()
+        print("z error", z_error_norm)
 
         repeat_factor = (layer_ks.size(1) // targets.size(1))
         targets = targets.repeat_interleave(repeat_factor, dim=1)
@@ -214,8 +217,18 @@ def execute_memit(
         weight_name = f"{hparams.rewrite_module_tmp.format(layer)}.weight"
         upd_matrix = upd_matrix_match_shape(upd_matrix, weights[weight_name].shape)
 
-        print("orig norm", torch.linalg.norm(weights[weight_name]))
-        print("upd norm", torch.linalg.norm(upd_matrix))
+        orig_weight_norm = torch.linalg.norm(weights[weight_name]).item()
+        upd_matrix_norm = torch.linalg.norm(upd_matrix).item()
+        print("orig norm", orig_weight_norm)
+        print("upd norm", upd_matrix_norm)
+        edit_stats["layers"].append(
+            {
+                "layer": layer,
+                "z_error_norm": z_error_norm,
+                "orig_weight_norm": orig_weight_norm,
+                "upd_matrix_norm": upd_matrix_norm,
+            }
+        )
 
         # Update model weights and record desired changes in `delta` variable
         with torch.no_grad():
@@ -239,7 +252,7 @@ def execute_memit(
 
     print(f"Deltas successfully computed for {list(weights.keys())}")
 
-    return deltas
+    return deltas, edit_stats
 
 
 def get_cov(

@@ -102,6 +102,7 @@ def compute_v(
     nethook.set_requires_grad(False, model)
 
     # Execute optimization
+    loss_trace = []
     for it in range(hparams.v_num_grad_steps):
         opt.zero_grad()
 
@@ -151,10 +152,21 @@ def compute_v(
         )
         # weight_decay = hparams.v_weight_decay * torch.norm(delta) ** 2
         loss = nll_loss + kl_loss + weight_decay
+        avg_target_prob = torch.exp(-nll_loss_each).mean().item()
         print(
             f"loss {np.round(loss.item(), 3)} = {np.round(nll_loss.item(), 3)} + {np.round(kl_loss.item(), 3)} + {np.round(weight_decay.item(), 3)} "
             f"avg prob of [{request['target_new']}] "
-            f"{torch.exp(-nll_loss_each).mean().item()}"
+            f"{avg_target_prob}"
+        )
+        loss_trace.append(
+            {
+                "step": it,
+                "loss": loss.item(),
+                "nll_loss": nll_loss.item(),
+                "kl_loss": kl_loss.item(),
+                "weight_decay": weight_decay.item(),
+                "avg_target_prob": avg_target_prob,
+            }
         )
         if loss < 5e-2:
             break
@@ -188,14 +200,29 @@ def compute_v(
 
     # Solving the linear system to compute the right vector
     right_vector = (target - cur_output) / torch.dot(cur_input, left_vector)
-    print(f"Delta norm: {(target - cur_output).norm().item()}")
+    delta_norm = (target - cur_output).norm().item()
+    target_norm_init = target_init.norm().item()
+    target_norm_final = target.norm().item()
+    division_factor = torch.dot(cur_input, left_vector).item()
+    right_vector_norm = right_vector.norm().item()
+    print(f"Delta norm: {delta_norm}")
     print(
-        f"Change in target norm: {target_init.norm().item()} to {target.norm().item()} => {(target.norm() - target_init.norm()).item()}"
+        f"Change in target norm: {target_norm_init} to {target_norm_final} => {target_norm_final - target_norm_init}"
     )
-    print(f"Division Factor: {torch.dot(cur_input, left_vector).item()}")
-    print(f"Right vector norm: {right_vector.norm()}")
+    print(f"Division Factor: {division_factor}")
+    print(f"Right vector norm: {right_vector_norm}")
 
-    return right_vector
+    stats = {
+        "loss_trace": loss_trace,
+        "delta_norm": delta_norm,
+        "target_norm_init": target_norm_init,
+        "target_norm_final": target_norm_final,
+        "target_norm_change": target_norm_final - target_norm_init,
+        "division_factor": division_factor,
+        "right_vector_norm": right_vector_norm,
+    }
+
+    return right_vector, stats
 
 
 def get_module_input_output_at_word(

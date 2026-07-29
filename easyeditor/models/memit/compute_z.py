@@ -141,6 +141,7 @@ def compute_z(
     nethook.set_requires_grad(False, model)
 
     # Execute optimization
+    loss_trace = []
     for it in range(hparams.v_num_grad_steps):
         opt.zero_grad()
 
@@ -199,10 +200,21 @@ def compute_z(
         )
         # weight_decay = hparams.v_weight_decay * torch.norm(delta) ** 2
         loss = nll_loss + kl_loss.to(nll_loss.device) + weight_decay.to(nll_loss.device)
+        avg_target_prob = torch.exp(-nll_loss_each).mean().item()
         print(
             f"loss {np.round(loss.item(), 3)} = {np.round(nll_loss.item(), 3)} + {np.round(kl_loss.item(), 3)} + {np.round(weight_decay.item(), 3)} "
             f"avg prob of [{request['target_new']}] "
-            f"{torch.exp(-nll_loss_each).mean().item()}"
+            f"{avg_target_prob}"
+        )
+        loss_trace.append(
+            {
+                "step": it,
+                "loss": loss.item(),
+                "nll_loss": nll_loss.item(),
+                "kl_loss": kl_loss.item(),
+                "weight_decay": weight_decay.item(),
+                "avg_target_prob": avg_target_prob,
+            }
         )
         if loss < 5e-2:
             break
@@ -221,11 +233,21 @@ def compute_z(
                 delta[...] = delta * max_norm / delta.norm()
 
     target = target_init + delta
+    target_init_norm = target_init.norm().item()
+    delta_norm = delta.norm().item()
+    target_norm = target.norm().item()
     print(
-        f"Init norm {target_init.norm()} | Delta norm {delta.norm()} | Target norm {target.norm()}"
+        f"Init norm {target_init_norm} | Delta norm {delta_norm} | Target norm {target_norm}"
     )
 
-    return target
+    stats = {
+        "loss_trace": loss_trace,
+        "target_init_norm": target_init_norm,
+        "delta_norm": delta_norm,
+        "target_norm": target_norm,
+    }
+
+    return target, stats
 
 
 def get_module_input_output_at_words(

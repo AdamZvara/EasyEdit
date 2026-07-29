@@ -218,7 +218,7 @@ if __name__ == "__main__":
     print(requests[0])
     editor = BaseEditor.from_hparams(hparams)
     print("begin editing")
-    metrics, edited_model, _ = editor.edit_requests(
+    metrics, edited_model, _, _ = editor.edit_requests(
         requests=requests,
         keep_original_weight=True,
     )

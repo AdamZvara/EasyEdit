@@ -38,7 +38,7 @@ def apply_rome_to_model(
 
     weights_copy = {}
 
-    deltas = execute_rome(model, tok, request, hparams)
+    deltas, edit_stats = execute_rome(model, tok, request, hparams)
 
     with torch.no_grad():
         for w_name, (delta_u, delta_v) in deltas.items():
@@ -53,7 +53,7 @@ def apply_rome_to_model(
 
         print(f"New weights successfully inserted into {list(deltas.keys())}")
 
-    return model, weights_copy
+    return model, weights_copy, edit_stats
 
 
 def execute_rome(
@@ -96,6 +96,7 @@ def execute_rome(
     
     # Update loop: sequentially intervene at each specified layer
     deltas = {}
+    edit_stats = {"method": "ROME", "layers": []}
     for layer in sorted(hparams.layers):
         # Compute rank-1 update matrix
         left_vector: torch.Tensor = compute_u(
@@ -107,7 +108,7 @@ def execute_rome(
             get_context_templates(model, tok, hparams.context_template_length_params),
         )
         print("Left vector shape:", left_vector.shape)
-        right_vector: torch.Tensor = compute_v(
+        right_vector, v_stats = compute_v(
             model,
             tok,
             request,
@@ -117,6 +118,7 @@ def execute_rome(
             get_context_templates(model, tok, hparams.context_template_length_params),
         )
         print("Right vector shape:", right_vector.shape)
+        edit_stats["layers"].append({"layer": layer, **v_stats})
 
         with torch.no_grad():
             # Determine correct transposition of delta matrix
@@ -138,7 +140,7 @@ def execute_rome(
 
     print(f"Deltas successfully computed for {list(weights.keys())}")
 
-    return deltas
+    return deltas, edit_stats
 
 
 def upd_matrix_match_shape(matrix: torch.Tensor, shape: torch.Size) -> torch.Tensor:

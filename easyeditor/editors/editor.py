@@ -337,8 +337,9 @@ class BaseEditor:
                     keep_original_weight=False,
                     train_ds=kwargs['train_ds'] if self.alg_name == 'IKE' else None
                 )
+                edit_stats = None
             else:
-                edited_model, weights_copy = self.apply_algo(
+                result = self.apply_algo(
                     self.model,
                     self.tok,
                     [request],
@@ -348,8 +349,13 @@ class BaseEditor:
                     keep_original_weight=False,
                     train_ds=kwargs['train_ds'] if self.alg_name == 'IKE' else None
                 )
+                if len(result) == 3:
+                    edited_model, weights_copy, edit_stats = result
+                else:
+                    edited_model, weights_copy = result
+                    edit_stats = None
                 icl_examples = None
-            return edited_model, weights_copy, icl_examples
+            return edited_model, weights_copy, icl_examples, edit_stats
 
         def edit_evaluation(all_metrics, request, edited_model, idx, test_generation, icl_examples, **kwargs):
             eval_metric= kwargs['eval_metric'] if 'eval_metric' in kwargs.keys() else 'exact match'
@@ -386,9 +392,11 @@ class BaseEditor:
                 LOG.info(f"{idx} editing: {request['prompt']} -> {request['target_new']}  \n\n {all_metrics[idx]}")
 
 
+        all_edit_stats = []
         if sequential_edit:
             for i, request in enumerate(tqdm(requests, total=len(requests))):
-                edited_model, weights_copy, icl_examples = edit_func(request)
+                edited_model, weights_copy, icl_examples, edit_stats = edit_func(request)
+                all_edit_stats.append({"case_id": i, **edit_stats} if edit_stats else None)
             if self.alg_name == 'LoRA' or self.alg_name == 'QLoRA' or self.alg_name == 'DPO':
                 self.model = edited_model
             if self.alg_name == 'WISE' and hasattr(self.hparams, 'save_path') and self.hparams.save_path:
@@ -398,7 +406,8 @@ class BaseEditor:
                 edit_evaluation(all_metrics, request, edited_model, i, test_generation, icl_examples, **kwargs)
         else:
             for i, request in enumerate(tqdm(requests, total=len(requests))):
-                edited_model, weights_copy, icl_examples = edit_func(request)
+                edited_model, weights_copy, icl_examples, edit_stats = edit_func(request)
+                all_edit_stats.append({"case_id": i, **edit_stats} if edit_stats else None)
                 edit_evaluation(all_metrics, request, edited_model, i, test_generation, icl_examples, **kwargs)
                 if self.alg_name == 'KN' or self.alg_name == 'GRACE' or self.alg_name == 'WISE':
                     with torch.no_grad():
@@ -419,7 +428,7 @@ class BaseEditor:
         if not hasattr(self.hparams, 'evaluation_type') or self.hparams.evaluation_type != "generate-text":
             summary_metrics(all_metrics)
 
-        return all_metrics, edited_model, weights_copy
+        return all_metrics, edited_model, weights_copy, all_edit_stats
 
     def normal_edit(
         self,

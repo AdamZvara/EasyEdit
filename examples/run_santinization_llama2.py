@@ -241,7 +241,7 @@ class Experimenter:
         for idx in range(len(train_data["prompt"])):
             prompt, target_new, subject = train_data["prompt"][idx], train_data["target_new"][idx], train_data["subject"][idx]
             assert subject in prompt
-            _, edited_model, _ = self.editor.edit(
+            _, edited_model, _, _ = self.editor.edit(
                 prompts=[prompt],
                 target_new=[target_new],
                 subject=[subject],
